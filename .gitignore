@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+.venv/
+venv/
+
+# Build folders
+build/
+dist/
+*.spec
+
+# Database / runtime files
+users.db
+sessions.json
+
+# Temp voice files
+voice_*.mp3
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Logs
+*.log

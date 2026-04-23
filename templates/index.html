@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gym AI Pose Analyzer</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        :root {
+            --bg1: #07111d;
+            --bg2: #0a1321;
+            --panel: rgba(10, 18, 30, 0.88);
+            --panel-border: rgba(255,255,255,0.10);
+            --text: #f5f7fb;
+            --muted: #9aa8bb;
+            --orange: #ff8c00;
+            --green: #63ff70;
+            --btn-bg: rgba(255,255,255,0.04);
+            --btn-border: rgba(255,255,255,0.12);
+        }
+
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(255,140,0,0.08), transparent 22%),
+                radial-gradient(circle at top right, rgba(0,170,255,0.05), transparent 18%),
+                linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 100%);
+            color: var(--text);
+        }
+
+        body {
+            outline: none;
+        }
+
+        .page {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-rows: 72px 1fr 118px;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 18px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            background: rgba(6, 12, 22, 0.55);
+            backdrop-filter: blur(8px);
+        }
+
+        .title-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .title {
+            font-size: 1.08rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        .top-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .help {
+            font-size: 0.84rem;
+            color: var(--muted);
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .user-pill {
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: #f5f7fb;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .logout-form {
+            margin: 0;
+        }
+
+        .logout-btn {
+            border: none;
+            background: linear-gradient(135deg, #ff8c00, #ff6a00);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .logout-btn:hover {
+            opacity: 0.96;
+        }
+
+        .stage {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 12px;
+            overflow: hidden;
+        }
+
+        .dashboard-frame {
+            width: min(98vw, calc((100vh - 215px) * 16 / 9));
+            max-width: 98vw;
+            max-height: calc(100vh - 215px);
+            aspect-ratio: 16 / 9;
+            border-radius: 20px;
+            overflow: hidden;
+            background: #000;
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+        }
+
+        .dashboard-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+            background: #000;
+        }
+
+        .dock {
+            display: grid;
+            grid-template-rows: 58px 60px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            background: rgba(6, 12, 22, 0.58);
+            backdrop-filter: blur(8px);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 8px 14px;
+            flex-wrap: wrap;
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: 260px 1fr 260px;
+            gap: 12px;
+            padding: 8px 14px 12px;
+        }
+
+        .exercise-btn,
+        .action-btn,
+        .voice-btn {
+            border: 1px solid var(--btn-border);
+            background: var(--btn-bg);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: 14px;
+            cursor: pointer;
+            font-size: 0.92rem;
+            transition: 0.2s ease;
+        }
+
+        .exercise-btn:hover,
+        .action-btn:hover,
+        .voice-btn:hover {
+            border-color: rgba(255,140,0,0.55);
+            transform: translateY(-1px);
+        }
+
+        .exercise-btn.active {
+            border-color: var(--orange);
+            color: var(--orange);
+            box-shadow: inset 0 0 0 1px rgba(255,140,0,0.25);
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #ff8c00, #ff6a00);
+            color: white;
+            border: none;
+            font-weight: 700;
+        }
+
+        .voice-btn.enabled {
+            border-color: var(--green);
+            color: var(--green);
+        }
+
+        .chip,
+        .feedback-box,
+        .status-box {
+            display: flex;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.03);
+            border-radius: 14px;
+            padding: 10px 14px;
+            font-size: 0.9rem;
+        }
+
+        .chip {
+            justify-content: center;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .feedback-box {
+            color: #dfffe5;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .status-box {
+            justify-content: center;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        @media (max-width: 1100px) {
+            .page {
+                grid-template-rows: auto 1fr auto;
+            }
+
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .top-right {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .help {
+                text-align: left;
+                white-space: normal;
+            }
+
+            .dashboard-frame {
+                width: 100%;
+                max-height: calc(100vh - 290px);
+            }
+
+            .dock {
+                grid-template-rows: auto auto;
+            }
+
+            .info-row {
+                grid-template-columns: 1fr;
+            }
+
+            .chip, .feedback-box, .status-box {
+                justify-content: flex-start;
+            }
+        }
+    </style>
+</head>
+<body tabindex="0">
+    <div class="page">
+        <div class="topbar">
+            <div class="title-wrap">
+                <div class="title">Gym AI Pose Analyzer</div>
+                <div class="subtitle">Exact dashboard output in browser mode</div>
+            </div>
+
+            <div class="top-right">
+                <div class="help">
+                    Keyboard: 1-6 switch exercise | Space pause/resume | R reset
+                </div>
+
+                {% if current_user %}
+                <div class="user-pill">
+                    {{ current_user["username"] }}
+                </div>
+
+                <form class="logout-form" method="post" action="{{ url_for('logout') }}">
+                    <button class="logout-btn" type="submit">Logout</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="stage">
+            <div class="dashboard-frame">
+                <img id="dashboardFeed" src="/video_feed" alt="Live dashboard stream" />
+            </div>
+        </div>
+
+        <div class="dock">
+            <div class="controls">
+                {% for ex in exercises %}
+                <button class="exercise-btn" data-exercise="{{ ex }}">{{ loop.index }} {{ ex }}</button>
+                {% endfor %}
+
+                <button class="action-btn primary" id="pauseBtn">Pause</button>
+                <button class="action-btn" id="resetBtn">Reset</button>
+                <button class="voice-btn" id="voiceBtn">Enable Voice</button>
+            </div>
+
+            <div class="info-row">
+                <div class="chip" id="metaChip">Loading...</div>
+                <div class="feedback-box" id="feedbackBox">Waiting for feedback...</div>
+                <div class="status-box" id="statusBox">Status</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const exerciseButtons = Array.from(document.querySelectorAll('.exercise-btn'));
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const metaChip = document.getElementById('metaChip');
+        const feedbackBox = document.getElementById('feedbackBox');
+        const statusBox = document.getElementById('statusBox');
+
+        let voiceEnabled = false;
+        let voicesLoaded = false;
+        let availableVoices = [];
+        let selectedVoice = null;
+
+        let lastRep = null;
+        let lastFeedback = "";
+        let lastExercise = "";
+        let lastPaused = null;
+        let lastFeedbackSpokenAt = 0;
+        let speakingNow = false;
+
+        function loadVoices() {
+            availableVoices = window.speechSynthesis.getVoices();
+
+            if (availableVoices.length > 0) {
+                voicesLoaded = true;
+
+                selectedVoice =
+                    availableVoices.find(v => v.lang && v.lang.toLowerCase().includes("en-in")) ||
+                    availableVoices.find(v => v.lang && v.lang.toLowerCase().includes("en-us")) ||
+                    availableVoices.find(v => v.lang && v.lang.toLowerCase().includes("en-gb")) ||
+                    availableVoices[0];
+            }
+        }
+
+        loadVoices();
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+
+        function speak(text, force = false) {
+            if (!voiceEnabled || !text) return;
+            if (!voicesLoaded) loadVoices();
+
+            try {
+                if (speakingNow && !force) return;
+
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.rate = 1.0;
+                utter.pitch = 1.0;
+                utter.volume = 1.0;
+
+                if (selectedVoice) {
+                    utter.voice = selectedVoice;
+                    utter.lang = selectedVoice.lang;
+                } else {
+                    utter.lang = "en-US";
+                }
+
+                utter.onstart = () => { speakingNow = true; };
+                utter.onend = () => { speakingNow = false; };
+                utter.onerror = () => { speakingNow = false; };
+
+                if (force) {
+                    window.speechSynthesis.cancel();
+                }
+
+                window.speechSynthesis.resume();
+                window.speechSynthesis.speak(utter);
+            } catch (e) {
+                speakingNow = false;
+                console.error("Speech error:", e);
+            }
+        }
+
+        async function setExercise(name) {
+            try {
+                const res = await fetch('/api/exercise', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exercise: name })
+                });
+
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                await refreshState();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function resetExercise() {
+            try {
+                const res = await fetch('/api/reset', { method: 'POST' });
+
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                if (voiceEnabled) speak("Reset done", true);
+                await refreshState();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function togglePause() {
+            try {
+                const res = await fetch('/api/toggle_pause', { method: 'POST' });
+
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                await refreshState();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function refreshState() {
+            try {
+                const res = await fetch('/api/state');
+
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                const data = await res.json();
+
+                exerciseButtons.forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.exercise === data.exercise);
+                });
+
+                pauseBtn.textContent = data.paused ? 'Resume' : 'Pause';
+                metaChip.textContent = `Exercise: ${data.exercise} | Reps: ${data.reps} | Score: ${data.score}`;
+                feedbackBox.textContent = (data.feedback && data.feedback.length)
+                    ? data.feedback[0]
+                    : 'No feedback available.';
+                statusBox.textContent = data.status_subtitle || 'Running';
+
+                if (voiceEnabled) {
+                    if (lastExercise !== "" && data.exercise !== lastExercise) {
+                        speak(data.exercise, true);
+                    }
+
+                    if (lastPaused !== null && data.paused !== lastPaused) {
+                        speak(data.paused ? "Paused" : "Resumed", true);
+                    }
+
+                    if (lastRep !== null && data.reps > lastRep) {
+                        speak(`Rep ${data.reps}`, true);
+                    }
+
+                    const currentFeedback = (data.feedback && data.feedback.length) ? data.feedback[0] : "";
+                    const now = Date.now();
+
+                    if (
+                        currentFeedback &&
+                        currentFeedback !== lastFeedback &&
+                        now - lastFeedbackSpokenAt > 5000 &&
+                        !data.paused
+                    ) {
+                        speak(currentFeedback, true);
+                        lastFeedbackSpokenAt = now;
+                    }
+                }
+
+                lastRep = data.reps;
+                lastFeedback = (data.feedback && data.feedback.length) ? data.feedback[0] : "";
+                lastExercise = data.exercise;
+                lastPaused = data.paused;
+
+            } catch (e) {
+                console.error("State refresh error:", e);
+            }
+        }
+
+        function enableVoice() {
+            voiceEnabled = !voiceEnabled;
+
+            if (voiceEnabled) {
+                loadVoices();
+                window.speechSynthesis.resume();
+                voiceBtn.classList.add('enabled');
+                voiceBtn.textContent = 'Voice Enabled';
+
+                const unlock = new SpeechSynthesisUtterance("Voice enabled");
+                if (selectedVoice) {
+                    unlock.voice = selectedVoice;
+                    unlock.lang = selectedVoice.lang;
+                } else {
+                    unlock.lang = "en-US";
+                }
+
+                unlock.volume = 1.0;
+                unlock.rate = 1.0;
+                unlock.pitch = 1.0;
+
+                unlock.onstart = () => { speakingNow = true; };
+                unlock.onend = () => { speakingNow = false; };
+                unlock.onerror = () => { speakingNow = false; };
+
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(unlock);
+            } else {
+                voiceBtn.classList.remove('enabled');
+                voiceBtn.textContent = 'Enable Voice';
+                window.speechSynthesis.cancel();
+                speakingNow = false;
+            }
+        }
+
+        function handleKey(e) {
+            const tag = (document.activeElement && document.activeElement.tagName || "").toLowerCase();
+            if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+            if (e.key >= '1' && e.key <= '6') {
+                const idx = parseInt(e.key, 10) - 1;
+                if (idx < exerciseButtons.length) {
+                    setExercise(exerciseButtons[idx].dataset.exercise);
+                }
+            } else if (e.code.startsWith('Numpad')) {
+                const num = parseInt(e.code.replace('Numpad', ''), 10);
+                if (!isNaN(num)) {
+                    const idx = num - 1;
+                    if (idx >= 0 && idx < exerciseButtons.length) {
+                        setExercise(exerciseButtons[idx].dataset.exercise);
+                    }
+                }
+            } else if (e.key === 'r' || e.key === 'R') {
+                e.preventDefault();
+                resetExercise();
+            } else if (e.code === 'Space') {
+                e.preventDefault();
+                togglePause();
+            }
+        }
+
+        exerciseButtons.forEach(btn => {
+            btn.addEventListener('click', () => setExercise(btn.dataset.exercise));
+        });
+
+        pauseBtn.addEventListener('click', togglePause);
+        resetBtn.addEventListener('click', resetExercise);
+        voiceBtn.addEventListener('click', enableVoice);
+
+        document.addEventListener('keydown', handleKey);
+        document.body.focus();
+        document.body.addEventListener('click', () => document.body.focus());
+
+        refreshState();
+        setInterval(refreshState, 800);
+    </script>
+</body>
+</html>

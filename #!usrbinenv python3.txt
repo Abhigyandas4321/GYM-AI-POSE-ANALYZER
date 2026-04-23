@@ -1,0 +1,395 @@
+<<<<<<< HEAD
+#!/usr/bin/env python3
+"""
+Gym Pose Estimator
+==================
+Real-time human pose analysis for gym exercises using MediaPipe.
+
+Controls
+--------
+  Q       : Quit
+  R       : Reset rep count
+  1-6     : Switch exercise
+  SPACE   : Pause / Resume
+"""
+
+import sys
+import time
+import argparse
+import cv2
+import mediapipe as mp
+import numpy as np
+
+from pose_analyzer import get_joint_angles, EXERCISE_CLASSES
+from ui_widgets import (
+    draw_left_panel,
+    draw_top_bar,
+    draw_exercise_selector,
+    draw_no_pose,
+    COLORS,
+)
+
+# ---------------------------------------------------------------------------
+# MediaPipe setup
+# ---------------------------------------------------------------------------
+mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+
+
+CUSTOM_LANDMARK_STYLE = mp_drawing.DrawingSpec(
+    color=(0, 220, 140), thickness=4, circle_radius=4
+)
+CUSTOM_CONNECTION_STYLE = mp_drawing.DrawingSpec(
+    color=(180, 180, 220), thickness=2
+)
+
+EXERCISE_NAMES = list(EXERCISE_CLASSES.keys())
+
+
+# ---------------------------------------------------------------------------
+# Main application
+# ---------------------------------------------------------------------------
+
+def run(camera_index: int = 0, width: int = 1280, height: int = 720):
+    cap = cv2.VideoCapture(camera_index)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+    if not cap.isOpened():
+        print(f"[ERROR] Cannot open camera {camera_index}. "
+              "Try a different index with --camera N.")
+        sys.exit(1)
+
+    # Instantiate all analysers upfront
+    analysers = {name: cls() for name, cls in EXERCISE_CLASSES.items()}
+    current_exercise = EXERCISE_NAMES[0]
+
+    paused = False
+    prev_time = time.time()
+    fps = 0.0
+    frame_count = 0
+
+    with mp_pose.Pose(
+        model_complexity=1,
+        smooth_landmarks=True,
+        enable_segmentation=False,
+        min_detection_confidence=0.6,
+        min_tracking_confidence=0.6,
+    ) as pose:
+
+        cv2.namedWindow("Gym Pose Estimator", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Gym Pose Estimator", width, height)
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("[WARN] Frame capture failed — retrying…")
+                continue
+
+            frame = cv2.flip(frame, 1)   # mirror like a gym mirror
+            display = frame.copy()
+
+            if not paused:
+                # --- Pose detection ---
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                rgb.flags.writeable = False
+                results = pose.process(rgb)
+                rgb.flags.writeable = True
+
+                analyser = analysers[current_exercise]
+
+                if results.pose_landmarks:
+                    # Draw skeleton
+                    mp_drawing.draw_landmarks(
+                        display,
+                        results.pose_landmarks,
+                        mp_pose.POSE_CONNECTIONS,
+                        landmark_drawing_spec=CUSTOM_LANDMARK_STYLE,
+                        connection_drawing_spec=CUSTOM_CONNECTION_STYLE,
+                    )
+
+                    landmarks = results.pose_landmarks.landmark
+                    angles = get_joint_angles(landmarks)
+                    score, feedback = analyser.update(landmarks, angles)
+
+                    draw_left_panel(
+                        display,
+                        current_exercise,
+                        analyser.rep_count,
+                        score,
+                        analyser.phase,
+                        feedback,
+                        angles,
+                        analyser.joints_of_interest,
+                    )
+                else:
+                    angles = {}
+                    draw_no_pose(display)
+                    draw_left_panel(
+                        display,
+                        current_exercise,
+                        analyser.rep_count,
+                        0,
+                        analyser.phase,
+                        ["No pose detected."],
+                        {},
+                        analyser.joints_of_interest,
+                    )
+            else:
+                # Paused — just dim the frame
+                overlay = np.zeros_like(display, dtype=np.uint8)
+                cv2.addWeighted(display, 0.4, overlay, 0.6, 0, display)
+                h, w = display.shape[:2]
+                msg = "PAUSED — Press SPACE to resume"
+                (tw, th), _ = cv2.getTextSize(msg, cv2.FONT_HERSHEY_DUPLEX, 0.9, 2)
+                cv2.putText(display, msg, ((w - tw) // 2, h // 2),
+                            cv2.FONT_HERSHEY_DUPLEX, 0.9,
+                            COLORS["warning"], 2, cv2.LINE_AA)
+
+            # FPS calculation
+            now = time.time()
+            fps = 0.9 * fps + 0.1 * (1.0 / max(now - prev_time, 1e-6))
+            prev_time = now
+
+            draw_top_bar(display, fps)
+            draw_exercise_selector(display, EXERCISE_NAMES,
+                                   EXERCISE_NAMES.index(current_exercise))
+
+            cv2.imshow("Gym Pose Estimator", display)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q") or key == 27:
+                break
+            elif key == ord("r"):
+                analysers[current_exercise].reset()
+                print(f"[INFO] Reset {current_exercise}")
+            elif key == ord(" "):
+                paused = not paused
+            elif ord("1") <= key <= ord("6"):
+                idx = key - ord("1")
+                if idx < len(EXERCISE_NAMES):
+                    current_exercise = EXERCISE_NAMES[idx]
+                    print(f"[INFO] Switched to {current_exercise}")
+
+    cap.release()
+    cv2.destroyAllWindows()
+    print("[INFO] Session ended.")
+
+
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Gym Pose Estimator — real-time exercise form analysis"
+    )
+    parser.add_argument("--camera", type=int, default=0,
+                        help="Camera device index (default: 0)")
+    parser.add_argument("--width", type=int, default=1280,
+                        help="Capture width  (default: 1280)")
+    parser.add_argument("--height", type=int, default=720,
+                        help="Capture height (default: 720)")
+    args = parser.parse_args()
+    run(args.camera, args.width, args.height)
+
+
+if __name__ == "__main__":
+    main()
+=======
+#!/usr/bin/env python3
+"""
+Gym Pose Estimator
+==================
+Real-time human pose analysis for gym exercises using MediaPipe.
+
+Controls
+--------
+  Q       : Quit
+  R       : Reset rep count
+  1-6     : Switch exercise
+  SPACE   : Pause / Resume
+"""
+
+import sys
+import time
+import argparse
+import cv2
+import mediapipe as mp
+import numpy as np
+
+from pose_analyzer import get_joint_angles, EXERCISE_CLASSES
+from ui_widgets import (
+    draw_left_panel,
+    draw_top_bar,
+    draw_exercise_selector,
+    draw_no_pose,
+    COLORS,
+)
+
+# ---------------------------------------------------------------------------
+# MediaPipe setup
+# ---------------------------------------------------------------------------
+mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+
+
+CUSTOM_LANDMARK_STYLE = mp_drawing.DrawingSpec(
+    color=(0, 220, 140), thickness=4, circle_radius=4
+)
+CUSTOM_CONNECTION_STYLE = mp_drawing.DrawingSpec(
+    color=(180, 180, 220), thickness=2
+)
+
+EXERCISE_NAMES = list(EXERCISE_CLASSES.keys())
+
+
+# ---------------------------------------------------------------------------
+# Main application
+# ---------------------------------------------------------------------------
+
+def run(camera_index: int = 0, width: int = 1280, height: int = 720):
+    cap = cv2.VideoCapture(camera_index)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+    if not cap.isOpened():
+        print(f"[ERROR] Cannot open camera {camera_index}. "
+              "Try a different index with --camera N.")
+        sys.exit(1)
+
+    # Instantiate all analysers upfront
+    analysers = {name: cls() for name, cls in EXERCISE_CLASSES.items()}
+    current_exercise = EXERCISE_NAMES[0]
+
+    paused = False
+    prev_time = time.time()
+    fps = 0.0
+    frame_count = 0
+
+    with mp_pose.Pose(
+        model_complexity=1,
+        smooth_landmarks=True,
+        enable_segmentation=False,
+        min_detection_confidence=0.6,
+        min_tracking_confidence=0.6,
+    ) as pose:
+
+        cv2.namedWindow("Gym Pose Estimator", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Gym Pose Estimator", width, height)
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("[WARN] Frame capture failed — retrying…")
+                continue
+
+            frame = cv2.flip(frame, 1)   # mirror like a gym mirror
+            display = frame.copy()
+
+            if not paused:
+                # --- Pose detection ---
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                rgb.flags.writeable = False
+                results = pose.process(rgb)
+                rgb.flags.writeable = True
+
+                analyser = analysers[current_exercise]
+
+                if results.pose_landmarks:
+                    # Draw skeleton
+                    mp_drawing.draw_landmarks(
+                        display,
+                        results.pose_landmarks,
+                        mp_pose.POSE_CONNECTIONS,
+                        landmark_drawing_spec=CUSTOM_LANDMARK_STYLE,
+                        connection_drawing_spec=CUSTOM_CONNECTION_STYLE,
+                    )
+
+                    landmarks = results.pose_landmarks.landmark
+                    angles = get_joint_angles(landmarks)
+                    score, feedback = analyser.update(landmarks, angles)
+
+                    draw_left_panel(
+                        display,
+                        current_exercise,
+                        analyser.rep_count,
+                        score,
+                        analyser.phase,
+                        feedback,
+                        angles,
+                        analyser.joints_of_interest,
+                    )
+                else:
+                    angles = {}
+                    draw_no_pose(display)
+                    draw_left_panel(
+                        display,
+                        current_exercise,
+                        analyser.rep_count,
+                        0,
+                        analyser.phase,
+                        ["No pose detected."],
+                        {},
+                        analyser.joints_of_interest,
+                    )
+            else:
+                # Paused — just dim the frame
+                overlay = np.zeros_like(display, dtype=np.uint8)
+                cv2.addWeighted(display, 0.4, overlay, 0.6, 0, display)
+                h, w = display.shape[:2]
+                msg = "PAUSED — Press SPACE to resume"
+                (tw, th), _ = cv2.getTextSize(msg, cv2.FONT_HERSHEY_DUPLEX, 0.9, 2)
+                cv2.putText(display, msg, ((w - tw) // 2, h // 2),
+                            cv2.FONT_HERSHEY_DUPLEX, 0.9,
+                            COLORS["warning"], 2, cv2.LINE_AA)
+
+            # FPS calculation
+            now = time.time()
+            fps = 0.9 * fps + 0.1 * (1.0 / max(now - prev_time, 1e-6))
+            prev_time = now
+
+            draw_top_bar(display, fps)
+            draw_exercise_selector(display, EXERCISE_NAMES,
+                                   EXERCISE_NAMES.index(current_exercise))
+
+            cv2.imshow("Gym Pose Estimator", display)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q") or key == 27:
+                break
+            elif key == ord("r"):
+                analysers[current_exercise].reset()
+                print(f"[INFO] Reset {current_exercise}")
+            elif key == ord(" "):
+                paused = not paused
+            elif ord("1") <= key <= ord("6"):
+                idx = key - ord("1")
+                if idx < len(EXERCISE_NAMES):
+                    current_exercise = EXERCISE_NAMES[idx]
+                    print(f"[INFO] Switched to {current_exercise}")
+
+    cap.release()
+    cv2.destroyAllWindows()
+    print("[INFO] Session ended.")
+
+
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Gym Pose Estimator — real-time exercise form analysis"
+    )
+    parser.add_argument("--camera", type=int, default=0,
+                        help="Camera device index (default: 0)")
+    parser.add_argument("--width", type=int, default=1280,
+                        help="Capture width  (default: 1280)")
+    parser.add_argument("--height", type=int, default=720,
+                        help="Capture height (default: 720)")
+    args = parser.parse_args()
+    run(args.camera, args.width, args.height)
+
+
+if __name__ == "__main__":
+    main()
+>>>>>>> c5c52c0cdb9e8c5faab1a50195700d90ec6628d8
